@@ -392,10 +392,38 @@ class Definition(FromHTML):
         return self._index
 
     @property
+    def is_adverb(self) -> bool:
+        """ Gets a value indicating whether the category of the definition corresponds to an adverb.
+        """
+        return self._category.abbr == 'adv.'
+
+    @property
+    def is_adjective(self) -> bool:
+        """ Gets a value indicating whether the category of the definition corresponds to an adjective.
+        """
+        return self._category.abbr == 'adj.'
+
+    @property
+    def is_noun(self) -> bool:
+        """ Gets a value indicating whether the category of the definition corresponds to a noun.
+        """
+        # noinspection SpellCheckingInspection
+        return self._category.abbr in ('s.', 'sust.')
+
+    @property
+    def is_pronoun(self) -> bool:
+        """ Gets a value indicating whether the category of the definition corresponds to a pronoun.
+        """
+        return self._category.abbr == 'pron.'
+
+    @property
     def is_verb(self) -> bool:
         """ Gets a value indicating whether the category of the definition corresponds to a verb.
         """
-        return self.__verb_re.match(self._category.text) is not None
+        # noinspection SpellCheckingInspection
+        return (self.__verb_re.match(self._category.text) is not None
+                or re.search(pattern='|'.join(('part.', 'ger.', 'pret.', 'fut.', 'pres.', 'infinit.')),
+                             string=self._category.abbr) is not None)
 
     @property
     def raw_text(self) -> str:
@@ -425,7 +453,14 @@ class Definition(FromHTML):
             res_dict['id'] = self._id
         res_dict.update({
             'index': self._index,
-            'category': self._category.to_dict(extended=extended)
+            'category': self._category.to_dict(extended=extended),
+            'is': {
+                'adjective': self.is_adjective,
+                'adverb': self.is_adverb,
+                'noun': self.is_noun,
+                'pronoun': self.is_pronoun,
+                'verb': self.is_verb
+            }
         })
         if extended:
             res_dict['first_of_category'] = self._first_of_category
@@ -931,6 +966,13 @@ class Article(Entry):
         return self._id
 
     @property
+    def is_verb(self) -> bool:
+        """ Gets a value indicating whether the article has conjugations or an entry that is a verb.
+        """
+        return self.conjugations is not None or any(definition for definition in self.definitions
+                                                    if definition.is_verb)
+
+    @property
     def lema(self) -> ArticleLema:
         """ Gets the lema for this article.
         """
@@ -952,6 +994,9 @@ class Article(Entry):
             'id': self._id,
             'lema': self.lema.to_dict(extended=extended),
             'supplementary_info': [s.to_dict(extended=extended) for s in self._supplementary_info],
+            'is': {
+              'verb': self.is_verb
+            },
             'definitions': [definition.to_dict(extended=extended) for definition in self._definitions],
             'complex_forms': [complex_form.to_dict(extended=extended) for complex_form in self._complex_forms],
             'other_entries': [entry.to_dict(extended=extended) for entry in self._other_entries]

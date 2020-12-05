@@ -1,51 +1,52 @@
 from pyrae import core
 from pyrae import logger
 from sys import version_info
+from typing import Optional
 from urllib.error import URLError, HTTPError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 
-def search_by_url(url: str) -> dict:
+def search_by_url(url: str) -> Optional[core.SearchResult]:
     """ Performs a search given the full URL to the RAE.
 
     :param url: A full URl to the RAE.
-    :return: A dictionary with search results, or an empty dictionary if an error occurs.
+    :return: A SearchResult instance, or None if an error occurs.
     """
     if not url:
         logger.current.error('No URL was specified.')
-        return {}
+        return None
     if not url.startswith(core.DLE_MAIN_URL):
         logger.current.error(f"The URL '{url}' seems to be invalid, it does not start with the known "
                              f"'{core.DLE_MAIN_URL}' URL.")
-        return {}
+        return None
     logger.current.info(f"Performing request to: '{url}'...")
     try:
         with urlopen(Request(url=url, headers={'User-Agent': 'Mozilla/5.0'})) as response:
             status_code = response.status if version_info >= (3, 9, 0) else response.code
             logger.current.debug(f'Received response with OK status code {status_code}.')
             result = core.SearchResult(html=response.read())
-            return result.to_dict()
+            return result
     except HTTPError as e:
         logger.current.error(f'The server could not fulfill the request. Error code: {e.code}.')
-        return {}
+        return None
     except URLError as e:
         logger.current.error(f'Failed to reach a server. Reason: {e.reason}')
-        return {}
+        return None
     except Exception as e:
         logger.current.error(f'Unexpected error. str{e}')
-        return {}
+        return None
 
 
-def search_by_word(word: str) -> dict:
+def search_by_word(word: str) -> Optional[core.SearchResult]:
     """ Performs a search given a word or search term.
 
     :param word: A word or term to search for.
-    :return: A dictionary with search results, or an empty dictionary if an error occurs.
+    :return: A SearchResult instance, or None if an error occurs.
     """
     if not word:
         logger.current.error('No word was specified.')
-        return {}
+        return None
     full_url = f'{core.DLE_MAIN_URL}/{quote(word)}'
     return search_by_url(url=full_url)
 
