@@ -408,7 +408,7 @@ class Definition(FromHTML):
         """ Gets a value indicating whether the category of the definition corresponds to a noun.
         """
         # noinspection SpellCheckingInspection
-        return self._category.abbr in ('s.', 'sust.')
+        return self._category.abbr in ('s.', 'sust.', 'm.', 'f.')
 
     @property
     def is_pronoun(self) -> bool:
