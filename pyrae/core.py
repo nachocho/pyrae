@@ -20,6 +20,12 @@ class FromHTML(ABC):
         self._soup: Optional[BeautifulSoup] = None
         self.html = html
 
+    def __getstate__(self):
+        return self.html
+
+    def __setstate__(self, html):
+        self.__init__(html)
+
     @property
     def html(self) -> str:
         """ Gets the HTML text used for parsing.
