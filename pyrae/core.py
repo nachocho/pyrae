@@ -60,6 +60,8 @@ class FromHTML(ABC):
         """
         if not self._html:
             raise Exception('No HTML has been set.')
+        if not re.search(pattern='<[^>]*>', string=str(self._html)):
+            raise Exception('No HTML text to parse.')
         self._soup = BeautifulSoup(self._html, 'html.parser')
         if not self._soup:
             raise Exception('Invalid HTML.')
