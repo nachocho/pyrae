@@ -1,3 +1,4 @@
+from dogpile.cache import make_region
 from pyrae import core
 from pyrae import logger
 from sys import version_info
@@ -6,7 +7,10 @@ from urllib.error import URLError, HTTPError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
+cache_region = make_region().configure('dogpile.cache.memory', expiration_time=86400)
 
+
+@cache_region.cache_on_arguments()
 def search_by_url(url: str) -> Optional[core.SearchResult]:
     """ Performs a search given the full URL to the RAE.
 
