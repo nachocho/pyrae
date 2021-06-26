@@ -17,8 +17,29 @@ class FromHTML(ABC):
 
         :param html: HTML text.
         """
+        self._parsed: bool = False
         self._soup: Optional[BeautifulSoup] = None
         self.html = html
+
+    def __getstate__(self) -> dict:
+        """ Gets a dictionary with attributes that are pickable.
+
+        :return: A dictionary with attributes that are pickable.
+        """
+        state = self.__dict__.copy()
+        # Remove the unpickable entries.
+        if '_soup' in state:
+            del state['_soup']
+        return state
+
+    def __setstate__(self, state):
+        """ Restores instance attributes after unpickling.
+
+        :param state: A saved instance state.
+        """
+        self.__dict__.update(state)
+        self._soup: Optional[BeautifulSoup] = None
+        self._parse_html()
 
     @property
     def html(self) -> str:
@@ -33,6 +54,7 @@ class FromHTML(ABC):
         :param value: The HTML text used for parsing.
         """
         self._html = value
+        self._parsed = False
         self._parse_html()
 
     @classmethod
@@ -66,6 +88,12 @@ class FromHTML(ABC):
         if not self._soup:
             raise Exception('Invalid HTML.')
 
+    @abstractmethod
+    def _reset(self):
+        """ Resets fields to a clean state. Needed when resetting the HTML text.
+        """
+        pass
+
 
 class Abbr(FromHTML):
     """ Represents an abbreviation.
@@ -75,9 +103,6 @@ class Abbr(FromHTML):
 
         :param html: HTML code that represents an abbreviation.
         """
-        self._abbr: str = ''
-        self._class: str = ''
-        self._text: str = ''
         super().__init__(html=html)
 
     def __repr__(self):
@@ -128,6 +153,9 @@ class Abbr(FromHTML):
         """ Parses the contents of the HTML.
         """
         super()._parse_html()
+        if self._parsed:
+            return
+        self._reset()
         if not self._soup.abbr:
             raise Exception('Invalid HTML.')
         self._abbr = self._soup.abbr.text
@@ -136,6 +164,14 @@ class Abbr(FromHTML):
         if not self._soup.abbr.has_attr('title'):
             raise Exception('The title attribute is expected to contain the expanded text.')
         self._text = self._soup.abbr['title']
+        self._parsed = True
+
+    def _reset(self):
+        """ Resets fields to a clean state. Needed when resetting the HTML text.
+        """
+        self._abbr: str = ''
+        self._class: str = ''
+        self._text: str = ''
 
 
 class Word(FromHTML):
@@ -148,10 +184,7 @@ class Word(FromHTML):
         :param html: HTML code that represents a single word.
         :param parent_href: An optional HREF to complement the link if needed.
         """
-        self._text: str = ''
-        self._href: str = ''
         self._parent_href: str = parent_href
-        self._is_active_link: bool = False
         super().__init__(html=html)
 
     def __repr__(self):
@@ -215,21 +248,30 @@ class Word(FromHTML):
         """ Parses the contents of the HTML.
         """
         super()._parse_html()
+        if self._parsed:
+            return
+        self._reset()
         if self._soup.mark:
             self._href = f"/?id={self._soup.mark['data-id']}"
             self._text = self._soup.mark.text
-            return
-        if self._soup.a:
+        elif self._soup.a:
             self._text = self._soup.a.text.strip()
             self._href = self._soup.a['href']
             if self._href and not self._href.startswith('/'):
                 self._href = f'/{self._parent_href}{self._href}'
             self._is_active_link = True
-            return
-        if self._soup.span and self._soup.span['class'][0].lower() == 'u':
+        elif self._soup.span and self._soup.span['class'][0].lower() == 'u':
             self._text = self._soup.span.text
-            return
-        raise Exception('The HTML code cannot be parsed to a Word.')
+        else:
+            raise Exception('The HTML code cannot be parsed to a Word.')
+        self._parsed = True
+
+    def _reset(self):
+        """ Resets fields to a clean state. Needed when resetting the HTML text.
+        """
+        self._text: str = ''
+        self._href: str = ''
+        self._is_active_link: bool = False
 
 
 class Sentence(FromHTML):
@@ -242,7 +284,6 @@ class Sentence(FromHTML):
         :param html: HTML code that can be parsed into a sentence.
         :param ignore_tags: A sequence of tags to be ignored while parsing the sentence.
         """
-        self._components: List[Union[Abbr, Word, str]] = []
         self._ignore_tags: Sequence[str] = ignore_tags
         super().__init__(html=html)
 
@@ -305,6 +346,9 @@ class Sentence(FromHTML):
         """ Parses the contents of the HTML.
         """
         super()._parse_html()
+        if self._parsed:
+            return
+        self._reset()
         for tag in self._soup.contents[0].children:
             if tag.name in self._ignore_tags:
                 continue
@@ -317,6 +361,12 @@ class Sentence(FromHTML):
                 self._components.append(word)
                 continue
             self._components.append(tag.get_text() if isinstance(tag, Tag) else str(tag))
+        self._parsed = True
+
+    def _reset(self):
+        """ Resets fields to a clean state. Needed when resetting the HTML text.
+        """
+        self._components: List[Union[Abbr, Word, str]] = []
 
 
 class Definition(FromHTML):
@@ -333,14 +383,6 @@ class Definition(FromHTML):
 
         :param html: HTML code that contains a definition.
         """
-        self._id: str = ''
-        self._index: int = 0
-        self._category: Optional[Abbr] = None
-        self._first_of_category: bool = False
-        self._abbreviations: List[Abbr] = []
-        self._sentence: Optional[Sentence] = None
-        self._examples: List[Sentence] = []
-        self._raw_text: str = ''
         super().__init__(html=html)
 
     def __repr__(self):
@@ -485,6 +527,9 @@ class Definition(FromHTML):
         """ Parses the contents of the HTML.
         """
         super()._parse_html()
+        if self._parsed:
+            return
+        self._reset()
         if not self._soup.p or not self._soup.p.has_attr('class'):
             raise Exception('Invalid HTML tag passed for a definition.')
         if self._soup.p['class'][0].lower()[0] not in ['j', 'm']:
@@ -515,6 +560,19 @@ class Definition(FromHTML):
                     # Another abbr to complement the main sentence of the definition
                     self._abbreviations.append(Abbr(html=str(tag)))
         self._sentence = Sentence(html=str(self._soup.p), ignore_tags=('abbr', 'span'))
+        self._parsed = True
+
+    def _reset(self):
+        """ Resets fields to a clean state. Needed when resetting the HTML text.
+        """
+        self._id: str = ''
+        self._index: int = 0
+        self._category: Optional[Abbr] = None
+        self._first_of_category: bool = False
+        self._abbreviations: List[Abbr] = []
+        self._sentence: Optional[Sentence] = None
+        self._examples: List[Sentence] = []
+        self._raw_text: str = ''
 
 
 class EntryLema(FromHTML):
@@ -532,9 +590,6 @@ class EntryLema(FromHTML):
 
         :param html: HTML code that contains a lema entry.
         """
-        self._id: str = ''
-        self._is_foreign: bool = False
-        self._lema: str = ''
         super().__init__(html=html)
 
     def __repr__(self):
@@ -587,6 +642,9 @@ class EntryLema(FromHTML):
         """ Parses the contents of the HTML.
         """
         super()._parse_html()
+        if self._parsed:
+            return
+        self._reset()
         tag = self._soup.find(name=self.PROCESSING_TAGS['lema']['tag'])
         if not tag or not tag.has_attr('class') or tag['class'][0].lower()[0] != self.PROCESSING_TAGS['lema']['class']:
             raise Exception('Invalid HTML.')
@@ -594,6 +652,14 @@ class EntryLema(FromHTML):
             self._id = tag['id']
         self._lema = tag.get_text()
         self._is_foreign = tag.find(name='i') is not None
+        self._parsed = True
+
+    def _reset(self):
+        """ Resets fields to a clean state. Needed when resetting the HTML text.
+        """
+        self._id: str = ''
+        self._is_foreign: bool = False
+        self._lema: str = ''
 
 
 class Entry(FromHTML):
@@ -616,10 +682,6 @@ class Entry(FromHTML):
 
         :param html: HTML code that contains a simple entry.
         """
-        self._lema: Optional[EntryLema] = None
-        self._supplementary_info: List[Sentence] = []
-        self._definitions: List[Definition] = []
-        self._raw_text: str = ''
         super().__init__(html=html)
 
     def __repr__(self):
@@ -679,7 +741,11 @@ class Entry(FromHTML):
         """ Parses the contents of the HTML.
         """
         super()._parse_html()
+        if self._parsed:
+            return
+        self._reset()
         self._process_entry(entry_tag=self._soup.contents[0])
+        self._parsed = True
 
     def _process_entry(self, entry_tag: Tag):
         """ Processes the whole entry.
@@ -706,6 +772,14 @@ class Entry(FromHTML):
             raise Exception('Could not process lema from the given HTML.')
         self._raw_text = self._soup.get_text()
 
+    def _reset(self):
+        """ Resets fields to a clean state. Needed when resetting the HTML text.
+        """
+        self._lema: Optional[EntryLema] = None
+        self._supplementary_info: List[Sentence] = []
+        self._definitions: List[Definition] = []
+        self._raw_text: str = ''
+
 
 class ArticleLema(EntryLema):
     """ Represents a lema for an article.
@@ -722,8 +796,6 @@ class ArticleLema(EntryLema):
 
         :param html: HTML code that contains an a lema for an article.
         """
-        self._index: int = 0
-        self._female_suffix: str = ''
         super().__init__(html=html)
 
     @property
@@ -778,6 +850,9 @@ class ArticleLema(EntryLema):
         """ Parses the contents of the HTML.
         """
         super()._parse_html()
+        if self._parsed:
+            return
+        self._reset()
         match = self.lema_re.match(string=self._lema)
         if match:
             self._lema = match['lema']
@@ -785,6 +860,14 @@ class ArticleLema(EntryLema):
                 self._index = int(match['index'])
             if match['female_suffix']:
                 self._female_suffix = match['female_suffix'].strip()
+        self._parsed = True
+
+    def _reset(self):
+        """ Resets fields to a clean state. Needed when resetting the HTML text.
+        """
+        super()._reset()
+        self._index: int = 0
+        self._female_suffix: str = ''
 
 
 class Conjugation(FromHTML):
@@ -817,9 +900,6 @@ class Conjugation(FromHTML):
 
         :param html: HTML code that contains the table of a conjugation.
         """
-        self._id: str = ''
-        self._verb: str = ''
-        self._conjugations: dict = {}
         super().__init__(html=html)
 
     def __repr__(self):
@@ -872,6 +952,9 @@ class Conjugation(FromHTML):
         """ Parses the contents of the HTML.
         """
         super()._parse_html()
+        if self._parsed:
+            return
+        self._reset()
         # noinspection SpellCheckingInspection
         if not self._soup.div or not self._soup.div.has_attr('id') or self._soup.div['id'] != 'conjugacion':
             raise Exception('Invalid HTML for a conjugations table.')
@@ -922,6 +1005,14 @@ class Conjugation(FromHTML):
                                 break
                         data_value = {persona: verbs} if persona else verbs
                         nested_dictionary_set(dictionary=self._conjugations, keys=keys, value=data_value)
+        self._parsed = True
+
+    def _reset(self):
+        """ Resets fields to a clean state. Needed when resetting the HTML text.
+        """
+        self._id: str = ''
+        self._verb: str = ''
+        self._conjugations: dict = {}
 
 
 class Article(Entry):
@@ -940,11 +1031,6 @@ class Article(Entry):
 
         :param html: HTML code that contains a definition.
         """
-        self._id: str = ''
-        self._lema: Optional[ArticleLema] = None
-        self._complex_forms: List[Entry] = []
-        self._other_entries: List[Word] = []
-        self.conjugations: Optional[Conjugation] = None
         super().__init__(html=html)
 
     def __repr__(self):
@@ -1019,6 +1105,9 @@ class Article(Entry):
         """ Parses the contents of the HTML.
         """
         super(Entry, self)._parse_html()
+        if self._parsed:
+            return
+        self._reset()
         if not self._soup.article or not self._soup.article.header:
             raise Exception('Invalid HTML.')
         if self._soup.article.has_attr('id'):
@@ -1051,6 +1140,17 @@ class Article(Entry):
         for complex_form_tag in complex_forms_tags:
             self._complex_forms.append(Entry(html=str(complex_form_tag)))
         self._raw_text = self._soup.get_text()
+        self._parsed = True
+
+    def _reset(self):
+        """ Resets fields to a clean state. Needed when resetting the HTML text.
+        """
+        super()._reset()
+        self._id: str = ''
+        self._lema: Optional[ArticleLema] = None
+        self._complex_forms: List[Entry] = []
+        self._other_entries: List[Word] = []
+        self.conjugations: Optional[Conjugation] = None
 
 
 class SearchResult(FromHTML):
@@ -1064,11 +1164,6 @@ class SearchResult(FromHTML):
 
         :param html: HTML code that contains a definition.
         """
-        self._articles: List[Article] = []
-        self._title: str = ''
-        self._canonical: str = ''
-        self._meta_description: str = ''
-        self._related_entries: dict = {}
         super().__init__(html=html)
 
     def __repr__(self):
@@ -1139,6 +1234,9 @@ class SearchResult(FromHTML):
         """ Parses the contents of the HTML.
         """
         super()._parse_html()
+        if self._parsed:
+            return
+        self._reset()
         canonical_tag = self._soup.find(name='link', attrs={'ref': 'canonical'})
         if canonical_tag:
             self._canonical = canonical_tag['href']
@@ -1170,3 +1268,13 @@ class SearchResult(FromHTML):
                     self._related_entries[match['related']].append(Word(html=str(related_res.a)))
                 else:
                     self._related_entries[match['related']] = [Word(html=str(related_res.a))]
+        self._parsed = True
+
+    def _reset(self):
+        """ Resets fields to a clean state. Needed when resetting the HTML text.
+        """
+        self._articles: List[Article] = []
+        self._title: str = ''
+        self._canonical: str = ''
+        self._meta_description: str = ''
+        self._related_entries: dict = {}
