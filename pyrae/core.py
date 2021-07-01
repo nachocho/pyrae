@@ -448,6 +448,12 @@ class Definition(FromHTML):
         return self._category.abbr == 'adj.'
 
     @property
+    def is_interjection(self) -> bool:
+        """ Gets a value indicating whether the category of the definition corresponds to an interjection.
+        """
+        return self._category.abbr == 'interj.'
+
+    @property
     def is_noun(self) -> bool:
         """ Gets a value indicating whether the category of the definition corresponds to a noun.
         """
@@ -468,12 +474,6 @@ class Definition(FromHTML):
         return (self.__verb_re.match(self._category.text) is not None
                 or re.search(pattern='|'.join(('part.', 'ger.', 'pret.', 'fut.', 'pres.', 'infinit.')),
                              string=self._category.abbr) is not None)
-    
-    @property
-    def is_interjection(self) -> bool:
-        """ Gets a value indicating whether the category of the definition corresponds to an interjection.
-        """
-        return self._category.abbr == 'interj.'
 
     @property
     def raw_text(self) -> str:
