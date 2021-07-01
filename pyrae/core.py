@@ -507,6 +507,7 @@ class Definition(FromHTML):
             'is': {
                 'adjective': self.is_adjective,
                 'adverb': self.is_adverb,
+                'interjection': self.is_interjection,
                 'noun': self.is_noun,
                 'pronoun': self.is_pronoun,
                 'verb': self.is_verb
