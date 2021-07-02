@@ -10,7 +10,10 @@ setuptools.setup(
     author="Javier Treviño",
     author_email="javier.trevino@gmail.com",
     description="Perform searches against the RAE dictionary.",
-    install_requires=['dogpile.cache'],
+    install_requires=[
+        'beautifulsoup4',
+        'dogpile.cache'
+    ],
     license='MIT',
     long_description=long_description,
     long_description_content_type="text/markdown",
