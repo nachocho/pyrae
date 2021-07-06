@@ -771,7 +771,6 @@ class Entry(FromHTML):
                 self._definitions.append(Definition(html=str(tag)))
         if not self._lema:
             raise Exception('Could not process lema from the given HTML.')
-        self._raw_text = self._soup.get_text()
 
     def _reset(self):
         """ Resets fields to a clean state. Needed when resetting the HTML text.
@@ -1111,6 +1110,7 @@ class Article(Entry):
         self._reset()
         if not self._soup.article or not self._soup.article.header:
             raise Exception('Invalid HTML.')
+        self._raw_text = self._soup.get_text()
         if self._soup.article.has_attr('id'):
             self._id = self._soup.article['id']
         lema_entry_tag = Tag(name='lema_entry')
@@ -1140,7 +1140,6 @@ class Article(Entry):
         self._process_entry(entry_tag=lema_entry_tag)
         for complex_form_tag in complex_forms_tags:
             self._complex_forms.append(Entry(html=str(complex_form_tag)))
-        self._raw_text = self._soup.get_text()
         self._parsed = True
 
     def _reset(self):
