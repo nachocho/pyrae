@@ -973,6 +973,7 @@ class Conjugation(FromHTML):
             sub_type_keys_dict = {}
             verb_separators = (' u ' if self._verb.startswith('o') else ' o ', ' / ')
             type_key = ''
+            conjugation_keys_no_slash = ('Presente', 'Infinitivo', 'Gerundio', 'Participio')
             for row_tag in table_tag.children:
                 for cell_index, cell_tag in enumerate(row_tag.contents):
                     if cell_index < 3:
@@ -985,7 +986,9 @@ class Conjugation(FromHTML):
                             continue
                         # noinspection SpellCheckingInspection
                         sub_type_key = next((key for key in self._conjugations[type_key].keys()
-                                             if re.search(pattern=f'/ {key}' if key != 'Presente' else key,
+                                             if re.search(pattern=(f'/ {key}'
+                                                                   if key not in conjugation_keys_no_slash
+                                                                   else key),
                                                           string=header_text,
                                                           flags=re.IGNORECASE)), '')
                         sub_type_keys_dict[cell_index] = sub_type_key
