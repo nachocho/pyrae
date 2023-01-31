@@ -18,6 +18,7 @@ class FromHTML(ABC):
         :param html: HTML text.
         """
         self._parsed: bool = False
+        self._raw_text: str = ''
         self._soup: Optional[BeautifulSoup] = None
         self.html = html
 
@@ -260,7 +261,9 @@ class Word(FromHTML):
             if self._href and not self._href.startswith('/'):
                 self._href = f'/{self._parent_href}{self._href}'
             self._is_active_link = True
-        elif self._soup.span and self._soup.span['class'][0].lower() == 'u':
+        elif (self._soup.span
+              and (self._soup.span['class'][0].lower() == 'u'
+                   or 'data-id' in self._soup.span.attrs)):
             self._text = self._soup.span.text
         else:
             raise Exception('The HTML code cannot be parsed to a Word.')
@@ -351,6 +354,8 @@ class Sentence(FromHTML):
         self._reset()
         for tag in self._soup.contents[0].children:
             if tag.name in self._ignore_tags:
+                continue
+            if tag.name == 'span' and 'data-id' not in tag.attrs:
                 continue
             abbr = Abbr.from_html(html=str(tag))
             if abbr:
@@ -560,7 +565,7 @@ class Definition(FromHTML):
                 else:
                     # Another abbr to complement the main sentence of the definition
                     self._abbreviations.append(Abbr(html=str(tag)))
-        self._sentence = Sentence(html=str(self._soup.p), ignore_tags=('abbr', 'span'))
+        self._sentence = Sentence(html=str(self._soup.p), ignore_tags=('abbr',))
         self._parsed = True
 
     def _reset(self):
@@ -771,6 +776,7 @@ class Entry(FromHTML):
                 self._definitions.append(Definition(html=str(tag)))
         if not self._lema:
             raise Exception('Could not process lema from the given HTML.')
+        self._raw_text = self._soup.get_text()
 
     def _reset(self):
         """ Resets fields to a clean state. Needed when resetting the HTML text.
